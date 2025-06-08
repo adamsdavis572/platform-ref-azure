@@ -1,0 +1,86 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xapis.ingress.platformref.upbound.io
+spec:
+  group: ingress.platformref.upbound.io
+  names:
+    kind: XAPI
+    plural: xapis
+  claimNames:
+    kind: APIClaim
+    plural: apiclaims
+  connectionSecretKeys:
+    - apiId
+    - apiEndpoint
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                parameters:
+                  type: object
+                  description: API deployment configuration parameters.
+                  properties:
+                    productName:
+                      type: string
+                      description: Target APIM Product name where this API will be deployed.
+                    apiBasePath:
+                      type: string
+                      description: Base path for the API (e.g., '/v1/users').
+                    openApiSpecUrl:
+                      type: string
+                      description: Public URL to the OpenAPI specification (YAML format).
+                    backendServiceUrl:
+                      type: string
+                      description: Backend service URL that this API will proxy to.
+                    apimPolicyXml:
+                      type: string
+                      description: Optional custom APIM policy XML (inline).
+                    apimPolicyUrl:
+                      type: string
+                      description: Optional URL to custom APIM policy XML file.
+                    sharedIngressRef:
+                      type: object
+                      description: Reference to the shared XIngress infrastructure.
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                        - name
+                    deletionPolicy:
+                      description: Delete the external resources when the Claim/XR is deleted.
+                      enum:
+                        - Delete
+                        - Orphan
+                      type: string
+                      default: Delete
+                    providerConfigName:
+                      description: Crossplane ProviderConfig to use for provisioning these resources
+                      type: string
+                      default: default
+                  required:
+                    - productName
+                    - apiBasePath
+                    - openApiSpecUrl
+                    - backendServiceUrl
+                    - sharedIngressRef
+              required:
+                - parameters
+            status:
+              type: object
+              properties:
+                apiId:
+                  type: string
+                  description: The Azure resource ID of the created APIM API.
+                apiEndpoint:
+                  type: string
+                  description: The full endpoint URL for the deployed API.

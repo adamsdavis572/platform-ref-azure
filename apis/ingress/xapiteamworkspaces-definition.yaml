@@ -1,0 +1,84 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xapiteamworkspaces.ingress.platformref.upbound.io
+spec:
+  group: ingress.platformref.upbound.io
+  names:
+    kind: XAPITeamWorkspace
+    plural: xapiteamworkspaces
+  claimNames:
+    kind: APITeamWorkspaceClaim
+    plural: apiteamworkspaceclaims
+  connectionSecretKeys:
+    - customDomain
+    - apimProductId
+    - frontDoorRouteId
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                parameters:
+                  type: object
+                  description: Team workspace configuration parameters.
+                  properties:
+                    applicationIdentifier:
+                      type: string
+                      description: Unique identifier for the application/team.
+                    dnsPrefix:
+                      type: string
+                      description: DNS prefix for the custom domain (e.g., 'myapp' for myapp.platform.com).
+                    apimProductName:
+                      type: string
+                      description: Name for the APIM Product workspace.
+                    teamAzureADGroupId:
+                      type: string
+                      description: Azure AD Group ID for the team that will get RBAC permissions.
+                    sharedIngressRef:
+                      type: object
+                      description: Reference to the shared XIngress infrastructure.
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                        - name
+                    deletionPolicy:
+                      description: Delete the external resources when the Claim/XR is deleted.
+                      enum:
+                        - Delete
+                        - Orphan
+                      type: string
+                      default: Delete
+                    providerConfigName:
+                      description: Crossplane ProviderConfig to use for provisioning these resources
+                      type: string
+                      default: default
+                  required:
+                    - applicationIdentifier
+                    - dnsPrefix
+                    - apimProductName
+                    - teamAzureADGroupId
+                    - sharedIngressRef
+              required:
+                - parameters
+            status:
+              type: object
+              properties:
+                customDomain:
+                  type: string
+                  description: The custom domain assigned to this team workspace.
+                apimProductId:
+                  type: string
+                  description: The Azure resource ID of the created APIM Product.
+                frontDoorRouteId:
+                  type: string
+                  description: The Azure resource ID of the Front Door route.

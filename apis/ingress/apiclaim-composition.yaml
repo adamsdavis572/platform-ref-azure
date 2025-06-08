@@ -1,0 +1,225 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xapis.ingress.platformref.upbound.io
+  labels:
+    provider: azure
+    service: api-deployment
+spec:
+  writeConnectionSecretsToNamespace: crossplane-system
+  compositeTypeRef:
+    apiVersion: ingress.platformref.upbound.io/v1alpha1
+    kind: XAPI
+  resources:
+    # APIM API Resource
+    - name: apimApi
+      base:
+        apiVersion: apimanagement.azure.upbound.io/v1beta1
+        kind: APIManagementAPI
+        spec:
+          forProvider:
+            apiManagementNameRef:
+              name: "" # Will be patched from shared ingress
+            resourceGroupNameRef:
+              name: "" # Will be patched from shared ingress
+            displayName: ""
+            path: ""
+            protocols:
+              - https
+            serviceUrl: ""
+            import:
+              - contentFormat: openapi-link
+                contentValue: "" # OpenAPI spec URL
+            subscriptionRequired: true
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.productName
+              - fromFieldPath: spec.parameters.apiBasePath
+            strategy: string
+            string:
+              fmt: "%s%s"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.productName
+              - fromFieldPath: spec.parameters.apiBasePath
+            strategy: string
+            string:
+              fmt: "%s API - %s"
+          toFieldPath: spec.forProvider.displayName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.apiBasePath
+          toFieldPath: spec.forProvider.path
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.backendServiceUrl
+          toFieldPath: spec.forProvider.serviceUrl
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.openApiSpecUrl
+          toFieldPath: spec.forProvider.import[0].contentValue
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.apiManagementNameRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.resourceGroupNameRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.id
+          toFieldPath: status.apiId
+        - type: CombineToComposite
+          combine:
+            variables:
+              - fromFieldPath: status.atProvider.serviceUrl
+              - fromFieldPath: spec.forProvider.path
+            strategy: string
+            string:
+              fmt: "%s%s"
+          toFieldPath: status.apiEndpoint
+
+    # APIM API Product Association
+    - name: apiProductAssociation
+      base:
+        apiVersion: apimanagement.azure.upbound.io/v1beta1
+        kind: ProductAPI
+        spec:
+          forProvider:
+            apiManagementNameRef:
+              name: "" # Will be patched from shared ingress
+            resourceGroupNameRef:
+              name: "" # Will be patched from shared ingress
+            apiNameRef:
+              name: "" # Will reference the API created above
+            productIdRef:
+              name: "" # Will be patched to reference the target product
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.apiManagementNameRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.resourceGroupNameRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.productName
+          toFieldPath: spec.forProvider.productIdRef.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.productName
+              - fromFieldPath: spec.parameters.apiBasePath
+            strategy: string
+            string:
+              fmt: "%s%s-product-association"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+
+    # APIM API Policy (Optional)
+    - name: apimApiPolicy
+      base:
+        apiVersion: apimanagement.azure.upbound.io/v1beta1
+        kind: APIPolicy
+        spec:
+          forProvider:
+            apiManagementNameRef:
+              name: "" # Will be patched from shared ingress
+            resourceGroupNameRef:
+              name: "" # Will be patched from shared ingress
+            apiNameRef:
+              name: "" # Will reference the API created above
+            xmlContent: |
+              <policies>
+                <inbound>
+                  <base />
+                  <authentication-managed-identity resource="https://management.azure.com/" />
+                  <set-backend-service base-url="{{backend-url}}" />
+                </inbound>
+                <backend>
+                  <base />
+                </backend>
+                <outbound>
+                  <base />
+                </outbound>
+                <on-error>
+                  <base />
+                </on-error>
+              </policies>
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.apiManagementNameRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.resourceGroupNameRef.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.productName
+              - fromFieldPath: spec.parameters.apiBasePath
+            strategy: string
+            string:
+              fmt: "%s%s-policy"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.apimPolicyXml
+          toFieldPath: spec.forProvider.xmlContent
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+
+    # APIM Backend Configuration
+    - name: apimBackend
+      base:
+        apiVersion: apimanagement.azure.upbound.io/v1beta1
+        kind: Backend
+        spec:
+          forProvider:
+            apiManagementNameRef:
+              name: "" # Will be patched from shared ingress
+            resourceGroupNameRef:
+              name: "" # Will be patched from shared ingress
+            protocol: http
+            url: ""
+            credentials:
+              - authorization:
+                  - scheme: Bearer
+                    parameter: "{{managed-identity-token}}"
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.backendServiceUrl
+          toFieldPath: spec.forProvider.url
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.apiManagementNameRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.resourceGroupNameRef.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.productName
+              - fromFieldPath: spec.parameters.apiBasePath
+            strategy: string
+            string:
+              fmt: "%s%s-backend"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name

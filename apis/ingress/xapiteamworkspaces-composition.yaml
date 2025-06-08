@@ -1,0 +1,219 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xapiteamworkspaces.ingress.platformref.upbound.io
+  labels:
+    provider: azure
+    service: api-team-workspace
+spec:
+  writeConnectionSecretsToNamespace: crossplane-system
+  compositeTypeRef:
+    apiVersion: ingress.platformref.upbound.io/v1alpha1
+    kind: XAPITeamWorkspace
+  resources:
+    # APIM Product for Team Workspace
+    - name: apimProduct
+      base:
+        apiVersion: apimanagement.azure.upbound.io/v1beta1
+        kind: Product
+        spec:
+          forProvider:
+            apiManagementNameRef:
+              name: "" # Will be patched from shared ingress
+            displayName: ""
+            published: true
+            subscriptionRequired: true
+            approvalRequired: false
+            subscriptionsLimit: 10
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.apimProductName
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.apimProductName
+          toFieldPath: spec.forProvider.displayName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.apiManagementNameRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.id
+          toFieldPath: status.apimProductId
+
+    # Front Door Custom Domain
+    - name: frontDoorCustomDomain
+      base:
+        apiVersion: cdn.azure.upbound.io/v1beta1
+        kind: FrontdoorCustomDomain
+        spec:
+          forProvider:
+            cdnFrontdoorProfileIdRef:
+              name: "" # Will be patched from shared ingress
+            hostName: ""
+            tls:
+              - certificateType: ManagedCertificate
+                minimumTlsVersion: TLS12
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.dnsPrefix
+              - fromFieldPath: spec.parameters.sharedIngressRef.name
+            strategy: string
+            string:
+              fmt: "%s.%s" # Will need DNS zone name from shared ingress
+          toFieldPath: spec.forProvider.hostName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.cdnFrontdoorProfileIdRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+        - type: ToCompositeFieldPath
+          fromFieldPath: spec.forProvider.hostName
+          toFieldPath: status.customDomain
+
+    # Front Door Origin for APIM
+    - name: frontDoorOrigin
+      base:
+        apiVersion: cdn.azure.upbound.io/v1beta1
+        kind: FrontdoorOrigin
+        spec:
+          forProvider:
+            cdnFrontdoorOriginGroupIdRef:
+              name: "" # Will be patched from shared ingress
+            hostName: "" # Will be patched from APIM endpoint
+            httpPort: 80
+            httpsPort: 443
+            originHostHeader: ""
+            priority: 1
+            weight: 1000
+            certificateNameCheckEnabled: true
+            enabled: true
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.cdnFrontdoorOriginGroupIdRef.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.applicationIdentifier
+            strategy: string
+            string:
+              fmt: "%s-apim-origin"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+
+    # Front Door Route
+    - name: frontDoorRoute
+      base:
+        apiVersion: cdn.azure.upbound.io/v1beta1
+        kind: FrontdoorRoute
+        spec:
+          forProvider:
+            cdnFrontdoorEndpointIdRef:
+              name: "" # Will be patched from shared ingress
+            cdnFrontdoorOriginGroupIdRef:
+              name: "" # Will be patched from shared ingress
+            cdnFrontdoorCustomDomainIdsRefs:
+              - name: "" # Will reference the custom domain created above
+            forwardingProtocol: HttpsOnly
+            httpsRedirectEnabled: true
+            patternsToMatch:
+              - "/*"
+            supportedProtocols:
+              - Http
+              - Https
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.cdnFrontdoorEndpointIdRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.cdnFrontdoorOriginGroupIdRef.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.applicationIdentifier
+            strategy: string
+            string:
+              fmt: "%s-route"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.id
+          toFieldPath: status.frontDoorRouteId
+
+    # DNS CNAME Record
+    - name: dnsRecord
+      base:
+        apiVersion: dns.azure.upbound.io/v1beta1
+        kind: CNAMERecord
+        spec:
+          forProvider:
+            zoneName: "" # Will be patched from shared ingress DNS zone
+            resourceGroupNameRef:
+              name: "" # Will be patched from shared ingress
+            ttl: 300
+            record: "" # Will be patched from Front Door endpoint
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.dnsPrefix
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.name
+          toFieldPath: spec.forProvider.resourceGroupNameRef.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+
+    # RBAC Role Assignment for Team
+    - name: teamRoleAssignment
+      base:
+        apiVersion: authorization.azure.upbound.io/v1beta1
+        kind: RoleAssignment
+        spec:
+          forProvider:
+            principalId: ""
+            roleDefinitionName: API Management Service Contributor
+            scope: "" # Will be scoped to the APIM instance
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.teamAzureADGroupId
+          toFieldPath: spec.forProvider.principalId
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.applicationIdentifier
+              - fromFieldPath: spec.parameters.teamAzureADGroupId
+            strategy: string
+            string:
+              fmt: "%s-%s-rbac"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name

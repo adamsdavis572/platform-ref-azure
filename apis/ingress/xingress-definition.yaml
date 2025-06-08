@@ -1,0 +1,166 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xingresses.ingress.platformref.upbound.io
+spec:
+  group: ingress.platformref.upbound.io
+  names:
+    kind: XIngress
+    plural: xingresses
+  claimNames:
+    kind: Ingress
+    plural: ingresses
+  connectionSecretKeys:
+    - apimEndpoint
+    - frontDoorEndpoint
+    - publicDNSZoneName
+    - apimResourceId
+    - frontDoorResourceId
+    - resourceGroupName
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                parameters:
+                  type: object
+                  description: XIngress configuration parameters.
+                  properties:
+                    instanceName:
+                      type: string
+                      description: Unique instance name for the API Gateway solution.
+                      pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                      maxLength: 20
+                    location:
+                      type: string
+                      description: Azure region where resources will be created.
+                      enum:
+                        - EastUS
+                        - EastUS2
+                        - WestUS
+                        - WestUS2
+                        - CentralUS
+                        - WestEurope
+                        - NorthEurope
+                        - SoutheastAsia
+                        - EastAsia
+                      default: EastUS
+                    apimName:
+                      type: string
+                      description: Globally unique name for the API Management instance.
+                      pattern: '^[a-zA-Z](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$'
+                      minLength: 1
+                      maxLength: 50
+                    frontDoorName:
+                      type: string
+                      description: Globally unique name for the Azure Front Door Premium profile.
+                      pattern: '^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$'
+                      minLength: 5
+                      maxLength: 64
+                    vnetAddressPrefix:
+                      type: string
+                      description: IP address space for the VNet (e.g., "10.0.0.0/16").
+                      pattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}\/([0-9]|[1-2][0-9]|3[0-2])$'
+                      default: "10.0.0.0/16"
+                    apimSubnetAddressPrefix:
+                      type: string
+                      description: IP address prefix for the APIM dedicated subnet within the VNet (e.g., "10.0.0.0/24").
+                      pattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}\/([0-9]|[1-2][0-9]|3[0-2])$'
+                      default: "10.0.0.0/24"
+                    apimSku:
+                      type: string
+                      description: SKU for the API Management instance. Must be Premium or Developer for VNet integration.
+                      enum:
+                        - Premium
+                        - Developer
+                      default: Developer
+                    apimPublisherName:
+                      type: string
+                      description: Publisher name for the API Management instance.
+                      default: "Platform Team"
+                    apimPublisherEmail:
+                      type: string
+                      description: Publisher email for the API Management instance.
+                      format: email
+                      default: "platform@company.com"
+                    publicDNSZoneName:
+                      type: string
+                      description: Name of the pre-existing public Azure DNS Zone for custom domains.
+                      pattern: '^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])*\.[a-zA-Z]{2,}$'
+                    enableWAF:
+                      type: boolean
+                      description: Enable WAF protection on Front Door.
+                      default: true
+                    wafMode:
+                      type: string
+                      description: WAF mode - Detection or Prevention.
+                      enum:
+                        - Detection
+                        - Prevention
+                      default: Prevention
+                    deletionPolicy:
+                      description: Delete the external resources when the Claim/XR is deleted. Defaults to Delete
+                      enum:
+                        - Delete
+                        - Orphan
+                      type: string
+                      default: Delete
+                    providerConfigName:
+                      description: Crossplane ProviderConfig to use for provisioning these resources
+                      type: string
+                      default: default
+                  required:
+                    - instanceName
+                    - apimName
+                    - frontDoorName
+                    - publicDNSZoneName
+                    - apimPublisherEmail
+              required:
+                - parameters
+            status:
+              type: object
+              properties:
+                apimEndpoint:
+                  type: string
+                  description: The gateway URL of the provisioned API Management instance.
+                frontDoorEndpoint:
+                  type: string
+                  description: The CNAME endpoint of the provisioned Azure Front Door profile.
+                apimResourceId:
+                  type: string
+                  description: The Azure resource ID of the API Management instance.
+                frontDoorResourceId:
+                  type: string
+                  description: The Azure resource ID of the Front Door profile.
+                resourceGroupName:
+                  type: string
+                  description: The name of the resource group containing all resources.
+                vnetId:
+                  type: string
+                  description: The Azure resource ID of the VNet.
+                apimSubnetId:
+                  type: string
+                  description: The Azure resource ID of the APIM subnet.
+                ready:
+                  type: boolean
+                  description: Indicates if all infrastructure components are ready.
+                conditions:
+                  type: array
+                  description: Detailed status conditions for troubleshooting.
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string

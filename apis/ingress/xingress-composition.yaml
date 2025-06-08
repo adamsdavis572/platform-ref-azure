@@ -1,0 +1,310 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xingresses.ingress.platformref.upbound.io
+  labels:
+    provider: azure
+    service: api-gateway
+spec:
+  writeConnectionSecretsToNamespace: crossplane-system
+  compositeTypeRef:
+    apiVersion: ingress.platformref.upbound.io/v1alpha1
+    kind: XIngress
+  resources:
+    # Core Infrastructure Resources
+    - name: resourceGroup
+      base:
+        apiVersion: azure.upbound.io/v1beta1
+        kind: ResourceGroup
+        spec:
+          forProvider:
+            location: EastUS
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.location
+          toFieldPath: spec.forProvider.location
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.instanceName
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+
+    - name: virtualNetwork
+      base:
+        apiVersion: network.azure.upbound.io/v1beta1
+        kind: VirtualNetwork
+        spec:
+          forProvider:
+            addressSpace:
+              - 10.0.0.0/16
+            location: EastUS
+            resourceGroupNameSelector:
+              matchControllerRef: true
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.location
+          toFieldPath: spec.forProvider.location
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.instanceName
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.vnetAddressPrefix
+          toFieldPath: spec.forProvider.addressSpace[0]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+
+    - name: apimSubnet
+      base:
+        apiVersion: network.azure.upbound.io/v1beta1
+        kind: Subnet
+        spec:
+          forProvider:
+            addressPrefixes:
+              - 10.0.0.0/24
+            virtualNetworkNameSelector:
+              matchControllerRef: true
+            resourceGroupNameSelector:
+              matchControllerRef: true
+            delegation:
+              - name: apim-delegation
+                serviceDelegation:
+                  - name: Microsoft.ApiManagement/service
+                    actions:
+                      - Microsoft.Network/virtualNetworks/subnets/action
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.apimSubnetAddressPrefix
+          toFieldPath: spec.forProvider.addressPrefixes[0]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.instanceName
+            strategy: string
+            string:
+              fmt: "%s-apim-subnet"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+
+    # API Management Instance
+    - name: apiManagement
+      base:
+        apiVersion: apimanagement.azure.upbound.io/v1beta1
+        kind: Management
+        spec:
+          forProvider:
+            location: EastUS
+            resourceGroupNameSelector:
+              matchControllerRef: true
+            skuName: Developer_1
+            publisherName: Platform Team
+            publisherEmail: platform@company.com
+            virtualNetworkType: Internal
+            virtualNetworkConfiguration:
+              - subnetIdSelector:
+                  matchControllerRef: true
+            identity:
+              - type: SystemAssigned
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.location
+          toFieldPath: spec.forProvider.location
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.apimName
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.apimSku
+          toFieldPath: spec.forProvider.skuName
+          transforms:
+            - type: string
+              string:
+                fmt: "%s_1"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.gatewayUrl
+          toFieldPath: status.apimEndpoint
+
+    # Azure Front Door Premium Profile
+    - name: frontDoorProfile
+      base:
+        apiVersion: cdn.azure.upbound.io/v1beta1
+        kind: FrontdoorProfile
+        spec:
+          forProvider:
+            resourceGroupNameSelector:
+              matchControllerRef: true
+            skuName: Premium_AzureFrontDoor
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.frontDoorName
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.cname
+          toFieldPath: status.frontDoorEndpoint
+
+    # WAF Policy for Front Door
+    - name: wafPolicy
+      base:
+        apiVersion: cdn.azure.upbound.io/v1beta1
+        kind: FrontdoorFirewallPolicy
+        spec:
+          forProvider:
+            resourceGroupNameSelector:
+              matchControllerRef: true
+            skuName: Premium_AzureFrontDoor
+            mode: Prevention
+            enabled: true
+            managedRule:
+              - type: Microsoft_DefaultRuleSet
+                version: "2.1"
+                action: Block
+              - type: Microsoft_BotManagerRuleSet
+                version: "1.0"
+                action: Block
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.instanceName
+            strategy: string
+            string:
+              fmt: "%s-waf-policy"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+
+    # Front Door Origin Group for APIM
+    - name: frontDoorOriginGroup
+      base:
+        apiVersion: cdn.azure.upbound.io/v1beta1
+        kind: FrontdoorOriginGroup
+        spec:
+          forProvider:
+            cdnFrontdoorProfileIdSelector:
+              matchControllerRef: true
+            loadBalancing:
+              - additionalLatencyInMilliseconds: 50
+                sampleSize: 4
+                successfulSamplesRequired: 3
+            healthProbe:
+              - intervalInSeconds: 100
+                path: /status-0123456789abcdef
+                protocol: Https
+                requestType: HEAD
+      patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.instanceName
+            strategy: string
+            string:
+              fmt: "%s-apim-origin-group"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+
+    # Private Link Service for APIM
+    - name: privateLinkService
+      base:
+        apiVersion: network.azure.upbound.io/v1beta1
+        kind: PrivateLinkService
+        spec:
+          forProvider:
+            location: EastUS
+            resourceGroupNameSelector:
+              matchControllerRef: true
+            natIpConfiguration:
+              - name: primary
+                privateIpAddress: 10.0.0.10
+                privateIpAddressVersion: IPv4
+                subnetIdSelector:
+                  matchControllerRef: true
+            loadBalancerFrontendIpConfigurationIds: []
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.location
+          toFieldPath: spec.forProvider.location
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.parameters.instanceName
+            strategy: string
+            string:
+              fmt: "%s-apim-pls"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.deletionPolicy
+          toFieldPath: spec.deletionPolicy
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.providerConfigName
+          toFieldPath: spec.providerConfigRef.name
+
+  # Connection Secret Configuration
+  functions:
+    - name: compose-connection-details
+      type: function
+      step: compose-connection-details
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          apimEndpoint:
+            resource:
+              apiVersion: apimanagement.azure.upbound.io/v1beta1
+              kind: Management
+              matchControllerRef: true
+            connectionDetails:
+              - type: FromValue
+                name: apimEndpoint
+                value: 
+                  - fromFieldPath: status.atProvider.gatewayUrl
+          frontDoorEndpoint:
+            resource:
+              apiVersion: cdn.azure.upbound.io/v1beta1
+              kind: FrontdoorProfile
+              matchControllerRef: true
+            connectionDetails:
+              - type: FromValue
+                name: frontDoorEndpoint
+                value:
+                  - fromFieldPath: status.atProvider.cname
+          publicDNSZoneName:
+            resource:
+              apiVersion: ingress.platformref.upbound.io/v1alpha1
+              kind: XIngress
+            connectionDetails:
+              - type: FromValue
+                name: publicDNSZoneName
+                value:
+                  - fromFieldPath: spec.parameters.publicDNSZoneName
