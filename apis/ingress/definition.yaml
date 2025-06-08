@@ -1,0 +1,90 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xingresses.ingress.platformref.upbound.io
+spec:
+  group: ingress.platformref.upbound.io
+  names:
+    kind: XIngress
+    plural: xingresses
+  claimNames:
+    kind: Ingress
+    plural: ingresses
+  connectionSecretKeys:
+    - apimEndpoint
+    - frontDoorEndpoint
+    - publicDNSZoneName
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                parameters:
+                  type: object
+                  description: XIngress configuration parameters.
+                  properties:
+                    instanceName:
+                      type: string
+                      description: Unique instance name for the API Gateway solution.
+                    location:
+                      type: string
+                      description: Azure region where resources will be created.
+                    apimName:
+                      type: string
+                      description: Globally unique name for the API Management instance.
+                    frontDoorName:
+                      type: string
+                      description: Globally unique name for the Azure Front Door Premium profile.
+                    vnetAddressPrefix:
+                      type: string
+                      description: IP address space for the VNet (e.g., "10.0.0.0/16").
+                    apimSubnetAddressPrefix:
+                      type: string
+                      description: IP address prefix for the APIM dedicated subnet within the VNet (e.g., "10.0.0.0/24").
+                    apimSku:
+                      type: string
+                      description: SKU for the API Management instance.
+                      enum:
+                        - Premium
+                        - Developer
+                      default: Developer
+                    publicDNSZoneName:
+                      type: string
+                      description: Name of the pre-existing public Azure DNS Zone for custom domains.
+                    deletionPolicy:
+                      description: Delete the external resources when the Claim/XR is deleted. Defaults to Delete
+                      enum:
+                        - Delete
+                        - Orphan
+                      type: string
+                      default: Delete
+                    providerConfigName:
+                      description: Crossplane ProviderConfig to use for provisioning these resources
+                      type: string
+                      default: default
+                  required:
+                    - instanceName
+                    - location
+                    - apimName
+                    - frontDoorName
+                    - vnetAddressPrefix
+                    - apimSubnetAddressPrefix
+                    - apimSku
+                    - publicDNSZoneName
+              required:
+                - parameters
+            status:
+              type: object
+              properties:
+                apimEndpoint:
+                  type: string
+                  description: The endpoint URL of the provisioned API Management instance.
+                frontDoorEndpoint:
+                  type: string
+                  description: The endpoint URL of the provisioned Azure Front Door profile.
