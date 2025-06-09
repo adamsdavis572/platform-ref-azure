@@ -161,10 +161,7 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.providerConfigName
           toFieldPath: spec.providerConfigRef.name
-        - type: ToCompositeFieldPath
-          fromFieldPath: status.atProvider.cname
-          toFieldPath: status.frontDoorEndpoint
-
+       
     # WAF Policy for Front Door
     - name: wafPolicy
       base:
@@ -269,42 +266,3 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.providerConfigName
           toFieldPath: spec.providerConfigRef.name
-
-  # Connection Secret Configuration
-  functions:
-    - name: compose-connection-details
-      type: function
-      step: compose-connection-details
-      input:
-        apiVersion: pt.fn.crossplane.io/v1beta1
-        kind: Resources
-        resources:
-          apimEndpoint:
-            resource:
-              apiVersion: apimanagement.azure.upbound.io/v1beta1
-              kind: Management
-              matchControllerRef: true
-            connectionDetails:
-              - type: FromValue
-                name: apimEndpoint
-                value: 
-                  - fromFieldPath: status.atProvider.gatewayUrl
-          frontDoorEndpoint:
-            resource:
-              apiVersion: cdn.azure.upbound.io/v1beta1
-              kind: FrontdoorProfile
-              matchControllerRef: true
-            connectionDetails:
-              - type: FromValue
-                name: frontDoorEndpoint
-                value:
-                  - fromFieldPath: status.atProvider.cname
-          publicDNSZoneName:
-            resource:
-              apiVersion: ingress.platformref.upbound.io/v1alpha1
-              kind: XIngress
-            connectionDetails:
-              - type: FromValue
-                name: publicDNSZoneName
-                value:
-                  - fromFieldPath: spec.parameters.publicDNSZoneName

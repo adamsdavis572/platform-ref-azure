@@ -121,6 +121,7 @@ spec:
                     - frontDoorName
                     - publicDNSZoneName
                     - apimPublisherEmail
+                    - deletionPolicy
               required:
                 - parameters
             status:
