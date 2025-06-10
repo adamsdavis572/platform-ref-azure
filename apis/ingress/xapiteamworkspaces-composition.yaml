@@ -14,17 +14,16 @@ spec:
     # APIM Product for Team Workspace
     - name: apimProduct
       base:
-        apiVersion: apimanagement.azure.upbound.io/v1beta1
-        kind: Product
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
+        kind: ApiManagementProduct
         spec:
           forProvider:
-            apiManagementNameRef:
-              name: "" # Will be patched from shared ingress
+            apiManagementName: ""  # Will be patched from shared ingress
+            resourceGroupName: ""  # Will be patched from shared ingress
             displayName: ""
-            published: true
+            state: "published"
             subscriptionRequired: true
             approvalRequired: false
-            subscriptionsLimit: 10
       patches:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.apimProductName
@@ -34,7 +33,10 @@ spec:
           toFieldPath: spec.forProvider.displayName
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
-          toFieldPath: spec.forProvider.apiManagementNameRef.name
+          toFieldPath: spec.forProvider.apiManagementName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.sharedIngressRef.resourceGroupName
+          toFieldPath: spec.forProvider.resourceGroupName
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.deletionPolicy
           toFieldPath: spec.deletionPolicy
@@ -48,16 +50,15 @@ spec:
     # Front Door Custom Domain
     - name: frontDoorCustomDomain
       base:
-        apiVersion: cdn.azure.upbound.io/v1beta1
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
         kind: FrontdoorCustomDomain
         spec:
           forProvider:
-            cdnFrontdoorProfileIdRef:
-              name: "" # Will be patched from shared ingress
+            frontdoorProfileId: "" # Will be patched from shared ingress
             hostName: ""
-            tls:
-              - certificateType: ManagedCertificate
-                minimumTlsVersion: TLS12
+            tlsConfiguration:
+              certificateType: "ManagedCertificate"
+              minimumTlsVersion: "TLS12"
       patches:
         - type: CombineFromComposite
           combine:
@@ -70,7 +71,7 @@ spec:
           toFieldPath: spec.forProvider.hostName
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
-          toFieldPath: spec.forProvider.cdnFrontdoorProfileIdRef.name
+          toFieldPath: spec.forProvider.frontdoorProfileId
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.deletionPolicy
           toFieldPath: spec.deletionPolicy
@@ -84,20 +85,19 @@ spec:
     # Front Door Origin for APIM
     - name: frontDoorOrigin
       base:
-        apiVersion: cdn.azure.upbound.io/v1beta1
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
         kind: FrontdoorOrigin
         spec:
           forProvider:
-            cdnFrontdoorOriginGroupIdRef:
-              name: "" # Will be patched from shared ingress
+            frontdoorOriginGroupId: "" # Will be patched from shared ingress
             hostName: "" # Will be patched from APIM endpoint
             httpPort: 80
             httpsPort: 443
             originHostHeader: ""
             priority: 1
             weight: 1000
-            certificateNameCheckEnabled: true
-            enabled: true
+            enabledState: "Enabled"
+            enforceCertificateNameCheck: true
       patches:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
@@ -120,23 +120,21 @@ spec:
     # Front Door Route
     - name: frontDoorRoute
       base:
-        apiVersion: cdn.azure.upbound.io/v1beta1
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
         kind: FrontdoorRoute
         spec:
           forProvider:
-            cdnFrontdoorEndpointIdRef:
-              name: "" # Will be patched from shared ingress
-            cdnFrontdoorOriginGroupIdRef:
-              name: "" # Will be patched from shared ingress
-            cdnFrontdoorCustomDomainIdsRefs:
-              - name: "" # Will reference the custom domain created above
-            forwardingProtocol: HttpsOnly
-            httpsRedirectEnabled: true
+            frontdoorEndpointId: "" # Will be patched from shared ingress
+            frontdoorOriginGroupId: "" # Will be patched from shared ingress
+            frontdoorCustomDomainIds: [""] # Will reference the custom domain created above
+            forwardingProtocol: "HttpsOnly"
+            enabledState: "Enabled"
+            httpsRedirect: true
             patternsToMatch:
               - "/*"
             supportedProtocols:
-              - Http
-              - Https
+              - "Http"
+              - "Https"
       patches:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
@@ -165,13 +163,12 @@ spec:
     # DNS CNAME Record
     - name: dnsRecord
       base:
-        apiVersion: dns.azure.upbound.io/v1beta1
-        kind: CNAMERecord
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
+        kind: DnsCnameRecord
         spec:
           forProvider:
             zoneName: "" # Will be patched from shared ingress DNS zone
-            resourceGroupNameRef:
-              name: "" # Will be patched from shared ingress
+            resourceGroupName: "" # Will be patched from shared ingress
             ttl: 300
             record: "" # Will be patched from Front Door endpoint
       patches:
@@ -191,7 +188,7 @@ spec:
     # RBAC Role Assignment for Team
     - name: teamRoleAssignment
       base:
-        apiVersion: authorization.azure.upbound.io/v1beta1
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
         kind: RoleAssignment
         spec:
           forProvider:

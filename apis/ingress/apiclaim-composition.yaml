@@ -14,14 +14,12 @@ spec:
     # APIM API Resource
     - name: apimApi
       base:
-        apiVersion: apimanagement.azure.upbound.io/v1beta1
-        kind: APIManagementAPI
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
+        kind: ApiManagementApi
         spec:
           forProvider:
-            apiManagementNameRef:
-              name: "" # Will be patched from shared ingress
-            resourceGroupNameRef:
-              name: "" # Will be patched from shared ingress
+            apiManagementName: "" # Will be patched from shared ingress
+            resourceGroupName: "" # Will be patched from shared ingress
             displayName: ""
             path: ""
             protocols:
@@ -61,10 +59,10 @@ spec:
           toFieldPath: spec.forProvider.import[0].contentValue
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
-          toFieldPath: spec.forProvider.apiManagementNameRef.name
+          toFieldPath: spec.forProvider.apiManagementName
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
-          toFieldPath: spec.forProvider.resourceGroupNameRef.name
+          toFieldPath: spec.forProvider.resourceGroupName
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.deletionPolicy
           toFieldPath: spec.deletionPolicy
@@ -87,28 +85,24 @@ spec:
     # APIM API Product Association
     - name: apiProductAssociation
       base:
-        apiVersion: apimanagement.azure.upbound.io/v1beta1
-        kind: ProductAPI
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
+        kind: ApiManagementProductApi
         spec:
           forProvider:
-            apiManagementNameRef:
-              name: "" # Will be patched from shared ingress
-            resourceGroupNameRef:
-              name: "" # Will be patched from shared ingress
-            apiNameRef:
-              name: "" # Will reference the API created above
-            productIdRef:
-              name: "" # Will be patched to reference the target product
+            apiManagementName: "" # Will be patched from shared ingress
+            resourceGroupName: "" # Will be patched from shared ingress
+            apiName: "" # Will reference the API created above
+            productId: "" # Will be patched to reference the target product
       patches:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
-          toFieldPath: spec.forProvider.apiManagementNameRef.name
+          toFieldPath: spec.forProvider.apiManagementName
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
-          toFieldPath: spec.forProvider.resourceGroupNameRef.name
+          toFieldPath: spec.forProvider.resourceGroupName
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.productName
-          toFieldPath: spec.forProvider.productIdRef.name
+          toFieldPath: spec.forProvider.productId
         - type: CombineFromComposite
           combine:
             variables:
@@ -128,16 +122,13 @@ spec:
     # APIM API Policy (Optional)
     - name: apimApiPolicy
       base:
-        apiVersion: apimanagement.azure.upbound.io/v1beta1
-        kind: APIPolicy
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
+        kind: ApiManagementApiPolicy
         spec:
           forProvider:
-            apiManagementNameRef:
-              name: "" # Will be patched from shared ingress
-            resourceGroupNameRef:
-              name: "" # Will be patched from shared ingress
-            apiNameRef:
-              name: "" # Will reference the API created above
+            apiManagementName: "" # Will be patched from shared ingress
+            resourceGroupName: "" # Will be patched from shared ingress
+            apiName: "" # Will reference the API created above
             xmlContent: |
               <policies>
                 <inbound>
@@ -158,10 +149,10 @@ spec:
       patches:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
-          toFieldPath: spec.forProvider.apiManagementNameRef.name
+          toFieldPath: spec.forProvider.apiManagementName
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
-          toFieldPath: spec.forProvider.resourceGroupNameRef.name
+          toFieldPath: spec.forProvider.resourceGroupName
         - type: CombineFromComposite
           combine:
             variables:
@@ -184,30 +175,28 @@ spec:
     # APIM Backend Configuration
     - name: apimBackend
       base:
-        apiVersion: apimanagement.azure.upbound.io/v1beta1
-        kind: Backend
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
+        kind: ApiManagementBackend
         spec:
           forProvider:
-            apiManagementNameRef:
-              name: "" # Will be patched from shared ingress
-            resourceGroupNameRef:
-              name: "" # Will be patched from shared ingress
-            protocol: http
+            apiManagementName: "" # Will be patched from shared ingress
+            resourceGroupName: "" # Will be patched from shared ingress
+            protocol: "http"
             url: ""
             credentials:
-              - authorization:
-                  - scheme: Bearer
-                    parameter: "{{managed-identity-token}}"
+              authorization:
+                scheme: "Bearer"
+                parameter: "{{managed-identity-token}}"
       patches:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.backendServiceUrl
           toFieldPath: spec.forProvider.url
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
-          toFieldPath: spec.forProvider.apiManagementNameRef.name
+          toFieldPath: spec.forProvider.apiManagementName
         - type: FromCompositeFieldPath
           fromFieldPath: spec.parameters.sharedIngressRef.name
-          toFieldPath: spec.forProvider.resourceGroupNameRef.name
+          toFieldPath: spec.forProvider.resourceGroupName
         - type: CombineFromComposite
           combine:
             variables:

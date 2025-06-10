@@ -14,7 +14,7 @@ spec:
     # Core Infrastructure Resources
     - name: resourceGroup
       base:
-        apiVersion: azure.upbound.io/v1beta1
+        apiVersion: azure.upjet.crossplane.io/v1alpha1
         kind: ResourceGroup
         spec:
           forProvider:
